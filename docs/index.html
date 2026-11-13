@@ -30,6 +30,25 @@ button { font: inherit; cursor: pointer; }
   main { width: calc(100% - 28px); margin: 26px auto; }
   .fields, .cards { grid-template-columns: 1fr; }
 }
+
+body { color: #211c3d; background: radial-gradient(ellipse at 5% 70%, #dfd2ff, transparent 45%), radial-gradient(ellipse at 93% 10%, #ffd5ef, transparent 45%), #fff1fa; }
+h1 { color: #fff; position: relative; overflow: hidden; isolation: isolate; padding: clamp(25px, 5vw, 52px); border-radius: 30px; background: linear-gradient(120deg, #5640c9, #7560e4); box-shadow: 0 18px 42px #6448ba33; }
+h1::after { content: ''; position: absolute; z-index: -1; width: 260px; height: 260px; border-radius: 50%; top: -145px; right: -25px; background: #a891ff55; box-shadow: -150px 185px 0 -80px #ffb9ec55; }
+form, .supplier-card { border-color: #eee2fb; border-radius: 26px; box-shadow: 0 14px 34px #62349b16; }
+input { border-color: #d6c7ec; background: #fcf9ff; }
+.clear { background: #f1eafa; color: #6448a0; }
+#submit { border-radius: 999px; background: #5134b1; }
+#submit:hover { background: #412793; }
+:focus-visible { outline-color: #7354d0; }
+#status, .supplier-card .field-label { color: #58496e; }
+.supplier-card h2 { margin-bottom: 14px; }
+.supplier-card p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.supplier-card .field-label { margin: 0; }
+.copy-value { display: inline-flex; align-items: baseline; gap: 8px; max-width: 100%; min-width: 0; padding: 2px 4px; color: inherit; background: transparent; border: 0; border-radius: 6px; font: inherit; font-weight: 700; text-align: left; }
+.copy-value:hover { background: #f4edff; }
+.copy-value .copy-icon { flex: none; width: 16px; height: 16px; margin: 0; color: #a39daf; align-self: center; }
+.copy-value[data-copied] .copy-icon { color: #6544bf; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -56,6 +75,7 @@ button { font: inherit; cursor: pointer; }
 </form>
 <p id="status" role="status">請輸入廠商統編、自訂編號或公司名稱。</p>
 <section class="cards" id="results" aria-label="廠商查詢結果"></section>
+<p id="copy-status" class="sr-only" role="status"></p>
 </main>
 <script>
 const TERMS = {
@@ -158,6 +178,36 @@ let timer;
 let revision = 0;
 let composing = false;
 
+function copyValue(label, value) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'copy-value';
+  button.setAttribute('aria-label', '複製' + label + '：' + value);
+  button.append(document.createTextNode(value));
+  button.insertAdjacentHTML('beforeend', '<svg class="copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>');
+  const feedback = document.querySelector('#copy-status');
+  const icon = button.querySelector('svg');
+  const original = icon.innerHTML;
+  let reset;
+  button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      clearTimeout(reset);
+      feedback.textContent = '已複製' + label;
+      button.dataset.copied = '';
+      icon.innerHTML = '<path d="m5 12 4 4L19 6"/>';
+      reset = setTimeout(() => {
+        delete button.dataset.copied;
+        icon.innerHTML = original;
+      }, 1200);
+    } catch {
+      feedback.textContent = '無法複製' + label;
+      button.title = feedback.textContent;
+    }
+  });
+  return button;
+}
+
 function clearResults() {
   results.replaceChildren();
 }
@@ -182,15 +232,15 @@ async function search() {
       const card = document.createElement('article');
       card.className = 'supplier-card';
       const title = document.createElement('h2');
-      title.textContent = name || '未填公司名稱';
+      if (name) title.append(copyValue('廠商名稱', name));
+      else title.textContent = '未填公司名稱';
       card.append(title);
       for (const [label, value] of [['廠商編號', id], ['付款條件', terms]]) {
         const line = document.createElement('p');
         const caption = document.createElement('span');
         caption.textContent = label;
-        const detail = document.createElement('strong');
-        detail.textContent = value;
-        line.append(caption, detail);
+        caption.className = 'field-label';
+        line.append(caption, copyValue(label, value));
         card.append(line);
       }
       results.append(card);
