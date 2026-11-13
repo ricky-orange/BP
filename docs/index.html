@@ -50,6 +50,96 @@ tr:hover td { background: #f8fafc; }
 </div>
 </main>
 <script>
+const TERMS = {
+  '0100': '即期-現金', '0200': '即期-支票', '0300': '即期-電匯',
+  '0301': '工程-5日/20日電匯', 'K215': '月結15天支票', 'K230': '月結30天支票',
+  'K245': '月結45天支票', 'K260': '月結60天支票', 'K290': '月結90天支票',
+  'K315': '月結15天電匯款', 'K330': '月結30天電匯款', 'K345': '月結45天電匯款',
+  'K360': '月結60天電匯款', 'K390': '月結90天電匯款', 'K3C0': '月結120天電匯款',
+  'K3NN': '保留款'
+};
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let value = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') {
+        value += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        value += char;
+      }
+    } else if (char === '"' && !value) {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(value);
+      value = '';
+    } else if (char === '\n' || char === '\r') {
+      rows.push([...row, value]);
+      row = [];
+      value = '';
+      if (char === '\r' && text[i + 1] === '\n') i++;
+    } else {
+      value += char;
+    }
+  }
+  if (quoted) throw new Error('Incomplete CSV');
+  if (row.length || value) rows.push([...row, value]);
+  return rows;
+}
+
+function normalizeId(value) {
+  return /^00\d{8}$/.test(value) ? value.slice(2) : value;
+}
+
+function supplierRows(csv) {
+  const [headers = [], ...rows] = parseCsv(csv.replace(/^\uFEFF/, ''));
+  const [idColumn, nameColumn, termsColumn] = ['SD_SUPPLIER', 'COM_NAME', 'PAY_TERMS']
+    .map(column => headers.findIndex(header => header.trim() === column));
+  if ([idColumn, nameColumn, termsColumn].includes(-1)) throw new Error('Missing CSV columns');
+
+  return rows.filter(row => row[idColumn]?.trim()).map(row => {
+    const id = normalizeId(row[idColumn].trim());
+    const name = (row[nameColumn] || '').trim();
+    const raw = (row[termsColumn] || '').trim();
+    const code = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : raw.toUpperCase();
+    const label = TERMS[code || '0301'] || (/^[A-Z0-9]+$/.test(code) ? '未對照（' + raw + '）' : raw);
+    return [id, name, label];
+  });
+}
+
+function matchingSuppliers(rows, id, name) {
+  const idKey = normalizeId(id).toLowerCase();
+  const nameKey = name.toLowerCase();
+  return rows.filter(([supplierId, company]) =>
+    (!idKey || supplierId.toLowerCase() === idKey) &&
+    (!nameKey || company.toLowerCase().includes(nameKey)));
+}
+
+let suppliers;
+function loadSuppliers() {
+  if (!suppliers) {
+    suppliers = fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vSixigqeW99mSQdJss48AqEJ4gNMhex9-BcUmtRJ-8njbNANXgytX4IwzHMSnl8JintvYu8GIXmfJyi/pub?output=csv", { cache: 'no-store', credentials: 'omit' })
+      .then(response => {
+        if (!response.ok) throw new Error('CSV download failed');
+        return response.text();
+      })
+      .then(supplierRows)
+      .catch(error => {
+        suppliers = undefined;
+        throw error;
+      });
+  }
+  return suppliers;
+}
+loadSuppliers().catch(() => {});
+
 const form = document.querySelector('#search');
 const supplierId = document.querySelector('#supplier-id');
 const companyName = document.querySelector('#company-name');
@@ -79,21 +169,8 @@ async function search() {
 
   status.textContent = '查詢中…';
   try {
-    const config = await fetch('./config.json');
-    if (!config.ok) throw new Error('Missing configuration');
-    const { apiUrl } = await config.json();
-    if (request !== revision) return;
-    if (!apiUrl) {
-      status.textContent = '查詢服務尚未設定，請聯絡維護人員。';
-      return;
-    }
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name })
-    });
-    if (!response.ok) throw new Error('Search failed');
-    const data = await response.json();
+    const matches = matchingSuppliers(await loadSuppliers(), id, name);
+    const data = { rows: matches.slice(0, 50), truncated: matches.length > 50 };
     if (request !== revision) return;
     for (const values of data.rows) {
       const row = results.insertRow();
