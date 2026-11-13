@@ -6,25 +6,30 @@
 <title>SAP 廠商付款條件查詢</title>
 <style>
 * { box-sizing: border-box; }
-body { margin: 0; background: #fcfcfc; color: #374151; font: 14px "Segoe UI", "Microsoft JhengHei", sans-serif; }
-main { width: 95%; margin: 12px auto; }
-h1 { font-size: 18px; margin: 0 0 12px; }
-form { padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; box-shadow: 0 2px 8px #0001; }
-.fields { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(180px, 3fr) auto; gap: 10px; align-items: end; }
-label { display: grid; gap: 4px; color: #475569; font-weight: bold; }
-input, select, button { min-height: 38px; border-radius: 4px; font: inherit; padding: 6px 10px; }
-input, select { width: 100%; border: 1px solid #cbd5e1; background: white; }
-button { border: 1px solid #475569; background: #475569; color: white; font-weight: bold; cursor: pointer; padding-inline: 18px; }
-button:disabled { opacity: .6; cursor: wait; }
-:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-#status { min-height: 1.4em; margin: 12px 0 8px; }
-.table { overflow: auto; max-height: 65vh; border: 1px solid #e5e7eb; border-radius: 6px; background: white; }
-table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
-th { position: sticky; top: 0; background: #f3f4f6; white-space: nowrap; }
-td:first-child { white-space: nowrap; }
-tr:hover td { background: #f8fafc; }
-@media (max-width: 580px) { .fields { grid-template-columns: 1fr; } input, select { font-size: 16px; } }
+[hidden] { display: none !important; }
+body { margin: 0; min-height: 100vh; background: #eef3f8; color: #172b42; font: 17px/1.55 "Microsoft JhengHei", system-ui, sans-serif; }
+main { width: min(1120px, calc(100% - 48px)); margin: 60px auto; }
+h1 { margin: 0 0 24px; font-size: clamp(27px, 4vw, 44px); letter-spacing: -.025em; }
+form, .supplier-card { background: #fff; border: 1px solid #d8e2ed; border-radius: 20px; box-shadow: 0 10px 32px #1c3d6010; }
+form { padding: clamp(20px, 4vw, 36px); }
+.fields, .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+label { display: block; margin-bottom: 8px; font-weight: 700; }
+.control { position: relative; }
+input { width: 100%; min-height: 60px; padding: 12px 56px 12px 16px; border: 1px solid #aabbd0; border-radius: 12px; color: inherit; font: inherit; }
+button { font: inherit; cursor: pointer; }
+.clear { position: absolute; inset: 8px 8px 8px auto; width: 44px; border: 0; border-radius: 8px; background: #edf2f8; color: #294461; font-size: 25px; }
+#submit { margin-top: 20px; min-height: 48px; padding: 8px 28px; border: 0; border-radius: 10px; background: #173d65; color: #fff; font-weight: 700; }
+#submit:hover { background: #245785; }
+:focus-visible { outline: 3px solid #2879bd; outline-offset: 3px; }
+#status { margin: 24px 0 14px; color: #405872; }
+.supplier-card { padding: 22px; overflow-wrap: anywhere; }
+.supplier-card h2 { margin: 0 0 16px; font-size: 22px; }
+.supplier-card p { margin: 6px 0; }
+.supplier-card span { color: #405872; margin-right: 12px; }
+@media (max-width: 640px) {
+  main { width: calc(100% - 28px); margin: 26px auto; }
+  .fields, .cards { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -32,22 +37,25 @@ tr:hover td { background: #f8fafc; }
 <h1>SAP 廠商付款條件查詢</h1>
 <form id="search">
   <div class="fields">
-    <label>廠商統編／自訂編號
-      <input id="supplier-id" maxlength="100" placeholder="輸入 8 碼統編或自訂編號">
-    </label>
-    <label>公司名稱
-      <input id="company-name" maxlength="100" placeholder="輸入至少 2 個字元">
-    </label>
-    <button id="submit" type="submit">查詢</button>
+    <div>
+      <label for="supplier-id">廠商統編／自訂編號</label>
+      <div class="control">
+        <input id="supplier-id" maxlength="100" placeholder="輸入 8 碼統編或自訂編號">
+        <button type="button" class="clear" data-input="supplier-id" aria-label="清空廠商統編或自訂編號" hidden>×</button>
+      </div>
+    </div>
+    <div>
+      <label for="company-name">公司名稱</label>
+      <div class="control">
+        <input id="company-name" maxlength="100" placeholder="輸入至少 2 個字元">
+        <button type="button" class="clear" data-input="company-name" aria-label="清空公司名稱" hidden>×</button>
+      </div>
+    </div>
   </div>
+  <button id="submit" type="submit">查詢</button>
 </form>
-<p id="status" role="status">請輸入廠商編號或公司名稱。</p>
-<div class="table" id="table" hidden>
-  <table aria-label="廠商查詢結果">
-    <thead><tr><th scope="col">廠商編號</th><th scope="col">公司名稱</th><th scope="col">付款條件</th></tr></thead>
-    <tbody id="results"></tbody>
-  </table>
-</div>
+<p id="status" role="status">請輸入廠商統編、自訂編號或公司名稱。</p>
+<section class="cards" id="results" aria-label="廠商查詢結果"></section>
 </main>
 <script>
 const TERMS = {
@@ -144,7 +152,6 @@ const form = document.querySelector('#search');
 const supplierId = document.querySelector('#supplier-id');
 const companyName = document.querySelector('#company-name');
 const status = document.querySelector('#status');
-const table = document.querySelector('#table');
 const results = document.querySelector('#results');
 
 let timer;
@@ -153,7 +160,6 @@ let composing = false;
 
 function clearResults() {
   results.replaceChildren();
-  table.hidden = true;
 }
 
 async function search() {
@@ -172,11 +178,23 @@ async function search() {
     const matches = matchingSuppliers(await loadSuppliers(), id, name);
     const data = { rows: matches.slice(0, 50), truncated: matches.length > 50 };
     if (request !== revision) return;
-    for (const values of data.rows) {
-      const row = results.insertRow();
-      for (const value of values) row.insertCell().textContent = value;
+    for (const [id, name, terms] of data.rows) {
+      const card = document.createElement('article');
+      card.className = 'supplier-card';
+      const title = document.createElement('h2');
+      title.textContent = name || '未填公司名稱';
+      card.append(title);
+      for (const [label, value] of [['廠商編號', id], ['付款條件', terms]]) {
+        const line = document.createElement('p');
+        const caption = document.createElement('span');
+        caption.textContent = label;
+        const detail = document.createElement('strong');
+        detail.textContent = value;
+        line.append(caption, detail);
+        card.append(line);
+      }
+      results.append(card);
     }
-    table.hidden = data.rows.length === 0;
     status.textContent = data.truncated ? '顯示前 50 筆，請縮小搜尋範圍。'
       : data.rows.length ? '找到 ' + data.rows.length + ' 筆資料。'
       : '目前的廠商清單中查無符合資料。';
@@ -205,7 +223,31 @@ function scheduleSearch() {
   timer = setTimeout(search, 350);
 }
 
-form.addEventListener('input', scheduleSearch);
+for (const button of form.querySelectorAll('.clear')) {
+  const input = document.getElementById(button.dataset.input);
+  const other = input === supplierId ? companyName : supplierId;
+  const otherButton = form.querySelector('[data-input="' + other.id + '"]');
+
+  function activateInput() {
+    if (!other.value) return;
+    other.value = '';
+    otherButton.hidden = true;
+    scheduleSearch();
+  }
+
+  input.addEventListener('focus', activateInput);
+  input.addEventListener('input', () => {
+    activateInput();
+    button.hidden = !input.value;
+    scheduleSearch();
+  });
+  button.addEventListener('click', () => {
+    input.value = '';
+    input.focus();
+    button.hidden = true;
+    scheduleSearch();
+  });
+}
 form.addEventListener('compositionstart', () => {
   composing = true;
   scheduleSearch();
