@@ -13,10 +13,16 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function searchSuppliers(mode, query) {
-  const keyword = typeof query === 'string' ? query.trim().toLowerCase() : '';
-  if (!['id', 'name'].includes(mode) || !keyword || keyword.length > 100 ||
-      (mode === 'name' && keyword.length < 2)) {
+function displaySupplierId(value) {
+  const id = value.trim();
+  return /^00\d{8}$/.test(id) ? id.slice(2) : id;
+}
+
+function searchSuppliers(idQuery, nameQuery) {
+  const idKeyword = displaySupplierId(typeof idQuery === 'string' ? idQuery : '').toLowerCase();
+  const nameKeyword = typeof nameQuery === 'string' ? nameQuery.trim().toLowerCase() : '';
+  if ((!idKeyword && !nameKeyword) || idKeyword.length > 100 || nameKeyword.length > 100 ||
+      (nameKeyword && nameKeyword.length < 2)) {
     throw new Error('請輸入有效的查詢條件。');
   }
   const properties = PropertiesService.getScriptProperties();
@@ -25,17 +31,17 @@ function searchSuppliers(mode, query) {
   if (!sheet) throw new Error('找不到廠商資料分頁。');
 
   const [headers, ...rows] = sheet.getDataRange().getDisplayValues();
-  const [idIndex, nameIndex, termsIndex] = ['SD_SUPPLIER', 'COM_NAME', 'PAY_TERMS_FN']
+  const [idIndex, nameIndex, termsIndex] = ['SD_SUPPLIER', 'COM_NAME', 'PAY_TERMS']
     .map(header => headers.findIndex(value => value.trim() === header));
   if ([idIndex, nameIndex, termsIndex].includes(-1)) throw new Error('廠商資料缺少必要欄位。');
 
   const results = [];
   for (const row of rows) {
-    const id = row[idIndex].trim();
+    const id = displaySupplierId(row[idIndex]);
     const name = row[nameIndex].trim();
     if (!id) continue;
-    const matches = mode === 'id' ? id.toLowerCase() === keyword : name.toLowerCase().includes(keyword);
-    if (!matches) continue;
+    if (idKeyword && id.toLowerCase() !== idKeyword) continue;
+    if (nameKeyword && !name.toLowerCase().includes(nameKeyword)) continue;
 
     const rawCode = row[termsIndex].trim().toUpperCase();
     const code = /^\d{1,4}$/.test(rawCode) ? rawCode.padStart(4, '0') : rawCode;
