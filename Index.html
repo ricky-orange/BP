@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: #fcfcfc; color: #374151; font: 14px "Segoe UI", "Microsoft JhengHei", sans-serif; }
+main { width: 95%; margin: 12px auto; }
+h1 { font-size: 18px; margin: 0 0 12px; }
+form { padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; box-shadow: 0 2px 8px #0001; }
+.fields { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(180px, 3fr) auto; gap: 10px; align-items: end; }
+label { display: grid; gap: 4px; color: #475569; font-weight: bold; }
+input, select, button { min-height: 38px; border-radius: 4px; font: inherit; padding: 6px 10px; }
+input, select { width: 100%; border: 1px solid #cbd5e1; background: white; }
+button { border: 1px solid #475569; background: #475569; color: white; font-weight: bold; cursor: pointer; padding-inline: 18px; }
+button:disabled { opacity: .6; cursor: wait; }
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+#status { min-height: 1.4em; margin: 12px 0 8px; }
+.table { overflow: auto; max-height: 65vh; border: 1px solid #e5e7eb; border-radius: 6px; background: white; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+th { position: sticky; top: 0; background: #f3f4f6; white-space: nowrap; }
+td:first-child { white-space: nowrap; }
+tr:hover td { background: #f8fafc; }
+@media (max-width: 580px) { .fields { grid-template-columns: 1fr; } input, select { font-size: 16px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>SAP 廠商付款條件查詢</h1>
+<form id="search">
+  <div class="fields">
+    <label>查詢方式
+      <select id="mode"><option value="id">廠商編號</option><option value="name">公司名稱</option></select>
+    </label>
+    <label>查詢條件
+      <input id="query" required maxlength="100" placeholder="輸入完整廠商編號">
+    </label>
+    <button id="submit" type="submit">查詢</button>
+  </div>
+</form>
+<p id="status" role="status">請輸入廠商編號或公司名稱。</p>
+<div class="table" id="table" hidden>
+  <table aria-label="廠商查詢結果">
+    <thead><tr><th scope="col">廠商編號</th><th scope="col">公司名稱</th><th scope="col">付款條件</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+</div>
+</main>
+<script>
+const form = document.querySelector('#search');
+const mode = document.querySelector('#mode');
+const query = document.querySelector('#query');
+const button = document.querySelector('#submit');
+const status = document.querySelector('#status');
+const table = document.querySelector('#table');
+const results = document.querySelector('#results');
+
+mode.addEventListener('change', () => {
+  query.placeholder = mode.value === 'id' ? '輸入完整廠商編號' : '輸入至少 2 個字元';
+  query.focus();
+});
+
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  if (button.disabled) return;
+  const keyword = query.value.trim();
+  results.replaceChildren();
+  table.hidden = true;
+  if (!keyword || (mode.value === 'name' && keyword.length < 2)) {
+    status.textContent = mode.value === 'id' ? '請輸入完整廠商編號。' : '公司名稱請輸入至少 2 個字元。';
+    query.focus();
+    return;
+  }
+
+  status.textContent = '查詢中…';
+  button.disabled = true;
+  google.script.run
+    .withSuccessHandler(response => {
+      for (const values of response.rows) {
+        const row = results.insertRow();
+        for (const value of values) row.insertCell().textContent = value;
+      }
+      table.hidden = response.rows.length === 0;
+      status.textContent = response.truncated ? '顯示前 50 筆，請縮小搜尋範圍。'
+        : response.rows.length ? '找到 ' + response.rows.length + ' 筆資料。'
+        : '目前的廠商清單中查無符合資料。';
+      button.disabled = false;
+    })
+    .withFailureHandler(() => {
+      status.textContent = '暫時無法查詢，請稍後重試。若持續發生，請聯絡維護人員。';
+      button.disabled = false;
+    })
+    .searchSuppliers(mode.value, keyword);
+});
+</script>
+</body>
+</html>
