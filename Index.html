@@ -30,11 +30,11 @@ tr:hover td { background: #f8fafc; }
 <h1>SAP 廠商付款條件查詢</h1>
 <form id="search">
   <div class="fields">
-    <label>查詢方式
-      <select id="mode"><option value="id">廠商編號</option><option value="name">公司名稱</option></select>
+    <label>廠商統編／自訂編號
+      <input id="supplier-id" maxlength="100" placeholder="輸入 8 碼統編或自訂編號">
     </label>
-    <label>查詢條件
-      <input id="query" required maxlength="100" placeholder="輸入完整廠商編號">
+    <label>公司名稱
+      <input id="company-name" maxlength="100" placeholder="輸入至少 2 個字元">
     </label>
     <button id="submit" type="submit">查詢</button>
   </div>
@@ -49,34 +49,36 @@ tr:hover td { background: #f8fafc; }
 </main>
 <script>
 const form = document.querySelector('#search');
-const mode = document.querySelector('#mode');
-const query = document.querySelector('#query');
-const button = document.querySelector('#submit');
+const supplierId = document.querySelector('#supplier-id');
+const companyName = document.querySelector('#company-name');
 const status = document.querySelector('#status');
 const table = document.querySelector('#table');
 const results = document.querySelector('#results');
 
-mode.addEventListener('change', () => {
-  query.placeholder = mode.value === 'id' ? '輸入完整廠商編號' : '輸入至少 2 個字元';
-  query.focus();
-});
+let timer;
+let revision = 0;
+let composing = false;
 
-form.addEventListener('submit', event => {
-  event.preventDefault();
-  if (button.disabled) return;
-  const keyword = query.value.trim();
+function clearResults() {
   results.replaceChildren();
   table.hidden = true;
-  if (!keyword || (mode.value === 'name' && keyword.length < 2)) {
-    status.textContent = mode.value === 'id' ? '請輸入完整廠商編號。' : '公司名稱請輸入至少 2 個字元。';
-    query.focus();
+}
+
+function search() {
+  clearTimeout(timer);
+  const id = supplierId.value.trim();
+  const name = companyName.value.trim();
+  const request = ++revision;
+  clearResults();
+  if ((!id && !name) || (name && name.length < 2)) {
+    status.textContent = name ? '公司名稱請輸入至少 2 個字元。' : '請輸入廠商統編、自訂編號或公司名稱。';
     return;
   }
 
   status.textContent = '查詢中…';
-  button.disabled = true;
   google.script.run
     .withSuccessHandler(response => {
+      if (request !== revision) return;
       for (const values of response.rows) {
         const row = results.insertRow();
         for (const value of values) row.insertCell().textContent = value;
@@ -85,13 +87,46 @@ form.addEventListener('submit', event => {
       status.textContent = response.truncated ? '顯示前 50 筆，請縮小搜尋範圍。'
         : response.rows.length ? '找到 ' + response.rows.length + ' 筆資料。'
         : '目前的廠商清單中查無符合資料。';
-      button.disabled = false;
-    })
+      })
     .withFailureHandler(() => {
+      if (request !== revision) return;
       status.textContent = '暫時無法查詢，請稍後重試。若持續發生，請聯絡維護人員。';
-      button.disabled = false;
-    })
-    .searchSuppliers(mode.value, keyword);
+      })
+    .searchSuppliers(id, name);
+}
+
+function scheduleSearch() {
+  clearTimeout(timer);
+  revision++;
+  clearResults();
+  status.textContent = '請輸入廠商統編、自訂編號或公司名稱。';
+  if (composing) return;
+  const id = supplierId.value.trim();
+  const name = companyName.value.trim();
+  if (id && !/^(?:\d{8}|00\d{8}|[A-Za-z]\d{7})$/.test(id)) {
+    status.textContent = '請完成編號，或按查詢送出。';
+    return;
+  }
+  if ((!id && !name) || (name && name.length < 2)) {
+    if (name) status.textContent = '公司名稱請輸入至少 2 個字元。';
+    return;
+  }
+  status.textContent = '準備查詢…';
+  timer = setTimeout(search, 350);
+}
+
+form.addEventListener('input', scheduleSearch);
+form.addEventListener('compositionstart', () => {
+  composing = true;
+  scheduleSearch();
+});
+form.addEventListener('compositionend', () => {
+  composing = false;
+  scheduleSearch();
+});
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  if (!composing) search();
 });
 </script>
 </body>
