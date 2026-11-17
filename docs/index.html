@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SAP 廠商付款條件查詢</title>
+<title>SAP 廠商查詢</title>
 <style>
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -53,7 +53,7 @@ input { border-color: #d6c7ec; background: #fcf9ff; }
 </head>
 <body>
 <main>
-<h1>SAP 廠商付款條件查詢</h1>
+<h1>SAP 廠商查詢</h1>
 <form id="search">
   <div class="fields">
     <div>
@@ -78,15 +78,6 @@ input { border-color: #d6c7ec; background: #fcf9ff; }
 <p id="copy-status" class="sr-only" role="status"></p>
 </main>
 <script>
-const TERMS = {
-  '0100': '即期-現金', '0200': '即期-支票', '0300': '即期-電匯',
-  '0301': '工程-5日/20日電匯', 'K215': '月結15天支票', 'K230': '月結30天支票',
-  'K245': '月結45天支票', 'K260': '月結60天支票', 'K290': '月結90天支票',
-  'K315': '月結15天電匯款', 'K330': '月結30天電匯款', 'K345': '月結45天電匯款',
-  'K360': '月結60天電匯款', 'K390': '月結90天電匯款', 'K3C0': '月結120天電匯款',
-  'K3NN': '保留款'
-};
-
 function parseCsv(text) {
   const rows = [];
   let row = [];
@@ -128,17 +119,14 @@ function normalizeId(value) {
 
 function supplierRows(csv) {
   const [headers = [], ...rows] = parseCsv(csv.replace(/^\uFEFF/, ''));
-  const [idColumn, nameColumn, termsColumn] = ['SD_SUPPLIER', 'COM_NAME', 'PAY_TERMS']
+  const [idColumn, nameColumn] = ['SD_SUPPLIER', 'COM_NAME']
     .map(column => headers.findIndex(header => header.trim() === column));
-  if ([idColumn, nameColumn, termsColumn].includes(-1)) throw new Error('Missing CSV columns');
+  if ([idColumn, nameColumn].includes(-1)) throw new Error('Missing CSV columns');
 
   return rows.filter(row => row[idColumn]?.trim()).map(row => {
     const id = normalizeId(row[idColumn].trim());
     const name = (row[nameColumn] || '').trim();
-    const raw = (row[termsColumn] || '').trim();
-    const code = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : raw.toUpperCase();
-    const label = TERMS[code || '0301'] || (/^[A-Z0-9]+$/.test(code) ? '未對照（' + raw + '）' : raw);
-    return [id, name, label];
+    return [id, name];
   });
 }
 
@@ -228,21 +216,19 @@ async function search() {
     const matches = matchingSuppliers(await loadSuppliers(), id, name);
     const data = { rows: matches.slice(0, 50), truncated: matches.length > 50 };
     if (request !== revision) return;
-    for (const [id, name, terms] of data.rows) {
+    for (const [id, name] of data.rows) {
       const card = document.createElement('article');
       card.className = 'supplier-card';
       const title = document.createElement('h2');
       if (name) title.append(copyValue('廠商名稱', name));
       else title.textContent = '未填公司名稱';
       card.append(title);
-      for (const [label, value] of [['廠商編號', id], ['付款條件', terms]]) {
-        const line = document.createElement('p');
-        const caption = document.createElement('span');
-        caption.textContent = label;
-        caption.className = 'field-label';
-        line.append(caption, copyValue(label, value));
-        card.append(line);
-      }
+      const line = document.createElement('p');
+      const caption = document.createElement('span');
+      caption.textContent = '廠商編號';
+      caption.className = 'field-label';
+      line.append(caption, copyValue('廠商編號', id));
+      card.append(line);
       results.append(card);
     }
     status.textContent = data.truncated ? '顯示前 50 筆，請縮小搜尋範圍。'
